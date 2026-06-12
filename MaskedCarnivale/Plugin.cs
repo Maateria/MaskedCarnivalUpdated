@@ -200,40 +200,48 @@ public unsafe class Plugin : IDalamudPlugin
 
     private void Update(IFramework framework)
     {
-        if (!isEnabled && cfg.enable && outputWindowData != null && outputWindowData->isOutputActive == 0)
+        try
         {
-            isEnabled = cfg.enable;
-            Enable();
-        }
-        else if (isEnabled && !cfg.enable && outputWindowData != null && outputWindowData->isOutputActive != 0)
-        {
-            isEnabled = cfg.enable;
-            Disable();
-        }
-        else if (!isEnabled && !cfg.enable && outputWindowData != null && outputWindowData->isOutputActive != 0)
-        {
-            isEnabled = true;
-            cfg.enable = true;
-        }
-        else if (isEnabled && cfg.enable && outputWindowData != null && outputWindowData->isOutputActive == 0)
-        {
-            isEnabled = false;
-            cfg.enable = false;
-        }
+            if (!isEnabled && cfg.enable && outputWindowData != null && outputWindowData->isOutputActive == 0)
+            {
+                isEnabled = cfg.enable;
+                Enable();
+            }
+            else if (isEnabled && !cfg.enable && outputWindowData != null && outputWindowData->isOutputActive != 0)
+            {
+                isEnabled = cfg.enable;
+                Disable();
+            }
+            else if (!isEnabled && !cfg.enable && outputWindowData != null && outputWindowData->isOutputActive != 0)
+            {
+                isEnabled = true;
+                cfg.enable = true;
+            }
+            else if (isEnabled && cfg.enable && outputWindowData != null && outputWindowData->isOutputActive == 0)
+            {
+                isEnabled = false;
+                cfg.enable = false;
+            }
 
-        if (cfg.doUpdate && outputWindowData != null)
-        {
-            cfg.doUpdate = false;
-            FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device* ffxivDevice = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device.Instance();
-            SwapChain11 swapChain11 = (SwapChain11)(IntPtr)ffxivDevice->SwapChain->DXGISwapChain;
+            if (cfg.doUpdate && outputWindowData != null)
+            {
+                cfg.doUpdate = false;
+                FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device* ffxivDevice = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device.Instance();
 
-            outputWindowData->isGameActive = (byte)shareMemType;
-            outputWindowData->newTop = cfg.yPosition;
-            outputWindowData->newLeft = cfg.xPosition;
-            outputWindowData->newWidth = (int)ffxivDevice->SwapChain->Width;
-            outputWindowData->newHeight = (int)ffxivDevice->SwapChain->Height;
-            outputWindowData->newTopmost = (byte)cfg.orderStatus;
-            outputWindowData->updateWindow = true;
+                outputWindowData->isGameActive = (byte)shareMemType;
+                outputWindowData->newTop = cfg.yPosition;
+                outputWindowData->newLeft = cfg.xPosition;
+                outputWindowData->newWidth = (int)ffxivDevice->SwapChain->Width;
+                outputWindowData->newHeight = (int)ffxivDevice->SwapChain->Height;
+                outputWindowData->newTopmost = (byte)cfg.orderStatus;
+                outputWindowData->updateWindow = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Une exception non interceptee ici remonte jusqu'au tick natif du jeu
+            // (Framework.Tick) et fait crash le jeu entier, pas juste le plugin.
+            Log!.Error(ex, "[MaskedCarnivale] Exception in Update");
         }
     }
 
@@ -466,7 +474,6 @@ public unsafe class Plugin : IDalamudPlugin
         FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device* ffxivDevice = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device.Instance();
         Device11 dxDevice11 = (Device11)(IntPtr)ffxivDevice->D3D11Forwarder;
         DeviceContext11 dxDevCon11 = (DeviceContext11)(IntPtr)ffxivDevice->D3D11DeviceContext;
-        SwapChain11 swapChain11 = (SwapChain11)(IntPtr)ffxivDevice->SwapChain->DXGISwapChain;
 
         //----
         // If the window is open and we havent connected to the shared texture yet, connect to it
