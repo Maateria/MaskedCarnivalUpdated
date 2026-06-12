@@ -164,13 +164,17 @@ bool CreateOutputWindow(HINSTANCE hInstance, std::wstring wndClass, std::wstring
     if (!RegisterOutputClass(hInstance, wndClass))
         return false;
 
+    // Fenetre sans bordure ni barre de titre : avec WS_OVERLAPPEDWINDOW, la
+    // zone client (= taille du swapchain/texture rendue) est plus petite que
+    // le rectangle complet de la fenetre (a cause de la barre de titre et des
+    // bordures), ce qui decale le rendu et laisse une bande noire/vide.
     RECT wr = { 0, 0, width, height };
-    AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
+    AdjustWindowRect(&wr, WS_POPUP, FALSE);
 
     hWnd = CreateWindowEx(NULL,
         wndClass.c_str(),
         wndName.c_str(),
-        WS_OVERLAPPEDWINDOW,
+        WS_POPUP,
         wr.left,
         wr.top,
         wr.right - wr.left,
@@ -353,7 +357,7 @@ bool ResizeMoveWindow()
         dx11.devcon->OMSetRenderTargets(1, &nullRTV, NULL);
         dx11.destroyBackBuffer();
         dx11.devcon->Flush();
-        if (!dx11.resizeSwapchain(outputWindowData->newWidth, outputWindowData->newWidth))
+        if (!dx11.resizeSwapchain(outputWindowData->newWidth, outputWindowData->newHeight))
             return false;
         if (!dx11.createBackBuffer())
             return false;

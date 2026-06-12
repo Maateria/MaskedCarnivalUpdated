@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
     <Platforms>x64</Platforms>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -45,8 +45,8 @@
         <HintPath>$(DalamudLibPath)Dalamud.dll</HintPath>
         <Private>false</Private>
     </Reference>
-    <Reference Include="ImGui.NET">
-        <HintPath>$(DalamudLibPath)ImGui.NET.dll</HintPath>
+    <Reference Include="Dalamud.Bindings.ImGui">
+        <HintPath>$(DalamudLibPath)Dalamud.Bindings.ImGui.dll</HintPath>
         <Private>false</Private>
     </Reference>
     <Reference Include="ImGuiScene">

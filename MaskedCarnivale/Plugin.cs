@@ -66,7 +66,7 @@ public unsafe class Plugin : IDalamudPlugin
     private RenderObject? orthogSquare { get; set; } = null;
     private bool isEnabled = false;
     private int shareMemType = 0;
-    private int gameWindowWithUI = 107;
+    private int gameWindowWithUI = 106;
     private int gameWindowWithoutUI = 71;
 
     [StructLayout(LayoutKind.Sequential)]
