@@ -26,7 +26,7 @@ struct OutputWindowSetup
     int newLeft;
     int newWidth;
     int newHeight;
-    
+    LONGLONG adapterLuid;
 
     OutputWindowSetup()
     {
@@ -51,6 +51,7 @@ struct OutputWindowSetup
         newWidth = 0;
         newHeight = 0;
         newTopmost = 0;
+        adapterLuid = 0;
 
         t7 = false;
     }
@@ -102,7 +103,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
     if (!CreateOutputWindow(hInstance, windowClass, windowName, true, outputWindowData->width, outputWindowData->height))
         return false;
-    if (!dx11.createDevice())
+    if (!dx11.createDevice(&outputWindowData->adapterLuid))
         return false;
     if (!dx11.createSwapchain(hWnd, outputWindowData->width, outputWindowData->height))
         return false;

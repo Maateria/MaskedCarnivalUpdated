@@ -98,7 +98,8 @@ public unsafe class Plugin : IDalamudPlugin
         public int newLeft;
         public int newWidth;
         public int newHeight;
-        
+        public long adapterLuid;
+
 
         public OutputWindowSetup()
         {
@@ -122,6 +123,7 @@ public unsafe class Plugin : IDalamudPlugin
             newWidth = 0;
             newHeight = 0;
             newTopmost = 0;
+            adapterLuid = 0;
 
             t7 = false;
         }
@@ -317,7 +319,19 @@ public unsafe class Plugin : IDalamudPlugin
         FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device* ffxivDevice = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device.Instance();
         Device11 dxDevice11 = (Device11)(IntPtr)ffxivDevice->D3D11Forwarder;
         DeviceContext11 dxDevCon11 = (DeviceContext11)(IntPtr)ffxivDevice->D3D11DeviceContext;
-        
+
+        try
+        {
+            using SharpDX.DXGI.Device dxgiDevice = dxDevice11.QueryInterface<SharpDX.DXGI.Device>();
+            using SharpDX.DXGI.Adapter dxgiAdapter = dxgiDevice.Adapter;
+            outputWindowData->adapterLuid = dxgiAdapter.Description.Luid;
+        }
+        catch (Exception ex)
+        {
+            outputWindowData->adapterLuid = 0;
+            Log!.Warning($"[MaskedCarnivale] Failed to read GPU adapter LUID: {ex.Message}");
+        }
+
         outputWindowData->isGameActive = (byte)shareMemType;
         outputWindowData->newTop = cfg.yPosition;
         outputWindowData->newLeft = cfg.xPosition;

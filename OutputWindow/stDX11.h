@@ -38,7 +38,7 @@ struct stDX11
         Release();
     }
 
-    bool createDevice() {
+    bool createDevice(const LONGLONG* preferredAdapterLuid = nullptr) {
         UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #if defined(_DEBUG)
         // If the project is in a debug build, enable the debug layer.
@@ -51,7 +51,35 @@ struct stDX11
             return false;
         }
 
-        result = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, creationFlags, FeatureLevels, NumFeatureLevels, D3D11_SDK_VERSION, &dev, &FeatureLevel, &devcon);
+        // Sur les PC portables a deux cartes graphiques (ex: Intel + NVIDIA), le
+        // partage de texture D3D11 ne fonctionne qu'entre devices crees sur le
+        // meme adaptateur. On essaie donc de retrouver l'adaptateur utilise par
+        // le jeu (LUID transmis via la memoire partagee) et de creer notre
+        // device sur ce meme adaptateur.
+        IDXGIAdapter1* matchedAdapter = nullptr;
+        if (preferredAdapterLuid != nullptr && *preferredAdapterLuid != 0) {
+            IDXGIAdapter1* enumAdapter = nullptr;
+            for (UINT i = 0; factory->EnumAdapters1(i, &enumAdapter) != DXGI_ERROR_NOT_FOUND; i++) {
+                DXGI_ADAPTER_DESC1 desc;
+                enumAdapter->GetDesc1(&desc);
+
+                LONGLONG enumLuid = ((LONGLONG)desc.AdapterLuid.HighPart << 32) | (LONGLONG)(UINT)desc.AdapterLuid.LowPart;
+                if (enumLuid == *preferredAdapterLuid) {
+                    matchedAdapter = enumAdapter;
+                    break;
+                }
+
+                enumAdapter->Release();
+                enumAdapter = nullptr;
+            }
+        }
+
+        D3D_DRIVER_TYPE driverType = matchedAdapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE;
+        result = D3D11CreateDevice(matchedAdapter, driverType, nullptr, creationFlags, FeatureLevels, NumFeatureLevels, D3D11_SDK_VERSION, &dev, &FeatureLevel, &devcon);
+
+        if (matchedAdapter)
+            matchedAdapter->Release();
+
         if (FAILED(result)) {
             MessageBoxA(0, "Failed to create D3D11 device. (sDX11)", "Error", MB_OK);
             return false;
