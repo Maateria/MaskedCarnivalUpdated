@@ -242,6 +242,47 @@ public unsafe class Plugin : IDalamudPlugin
         internal const string DXGIPresent = "E8 ?? ?? ?? ?? C6 43 79 00";
     }
 
+    [DllImport("kernel32.dll")]
+    private static extern UIntPtr VirtualQuery(IntPtr lpAddress, out MEMORY_BASIC_INFORMATION lpBuffer, UIntPtr dwLength);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MEMORY_BASIC_INFORMATION
+    {
+        public IntPtr BaseAddress;
+        public IntPtr AllocationBase;
+        public uint AllocationProtect;
+        public IntPtr RegionSize;
+        public uint State;
+        public uint Protect;
+        public uint Type;
+    }
+
+    private const uint MEM_COMMIT = 0x1000;
+    private const uint PAGE_NOACCESS = 0x01;
+    private const uint PAGE_GUARD = 0x100;
+
+    // Garde-fou : sur certaines configs (resolution/parametres graphiques
+    // differents), l'index de render target "avec UI" peut pointer vers une
+    // texture invalide/non allouee. Dereferencer un pointeur invalide ici
+    // plante le jeu entier (crash natif, pas juste une exception .NET).
+    // On verifie donc que le pointeur est lisible avant d'y toucher.
+    private static bool IsReadablePointer(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero)
+            return false;
+
+        if (VirtualQuery(ptr, out var mbi, (UIntPtr)Marshal.SizeOf<MEMORY_BASIC_INFORMATION>()) == UIntPtr.Zero)
+            return false;
+
+        if (mbi.State != MEM_COMMIT)
+            return false;
+
+        if ((mbi.Protect & PAGE_NOACCESS) != 0 || (mbi.Protect & PAGE_GUARD) != 0)
+            return false;
+
+        return true;
+    }
+
     private void Initialize()
     {
         Interop.InitializeFromAttributes(this);
@@ -467,25 +508,37 @@ public unsafe class Plugin : IDalamudPlugin
                 selectedSRV = null;
 
                 UInt64 rtManagerAddr = ((UInt64)renderTargetManager) + 0x20;
-                Texture* rendText = *(Texture**)(rtManagerAddr + (ulong)(0x8 * cfg.renderIndex));
+                IntPtr entryAddr = (IntPtr)(rtManagerAddr + (ulong)(0x8 * cfg.renderIndex));
 
-                if (rendText != null && rendText->D3D11Texture2D != null)
+                if (IsReadablePointer(entryAddr))
                 {
-                    Texture2DDescription rt0 = ((Texture2D)(IntPtr)rendText->D3D11Texture2D).Description;
-                    //Log!.Info($"ID: {cfg.renderIndex} | {(UInt64)rendText:x} | Width: {rt0.Width} | Height: {rt0.Height} | Usage: {rt0.Usage:x} | Format: {rt0.Format:x} | BindFlags: {rt0.BindFlags:x} | OptionFlags: {rt0.OptionFlags}");
+                    Texture* rendText = *(Texture**)entryAddr;
 
-                    if ((rt0.BindFlags & BindFlags.ShaderResource) == BindFlags.ShaderResource)
+                    if (IsReadablePointer((IntPtr)rendText) && IsReadablePointer((IntPtr)rendText->D3D11Texture2D))
                     {
-                        SharpDX.Direct3D11.Resource tmpResource = ((Texture2D)(IntPtr)rendText->D3D11Texture2D).QueryInterface<SharpDX.Direct3D11.Resource>();
                         try
                         {
-                            selectedSRV = new ShaderResourceView(dxDevice11, tmpResource);
+                            Texture2DDescription rt0 = ((Texture2D)(IntPtr)rendText->D3D11Texture2D).Description;
+
+                            if ((rt0.BindFlags & BindFlags.ShaderResource) == BindFlags.ShaderResource)
+                            {
+                                SharpDX.Direct3D11.Resource tmpResource = ((Texture2D)(IntPtr)rendText->D3D11Texture2D).QueryInterface<SharpDX.Direct3D11.Resource>();
+                                try
+                                {
+                                    selectedSRV = new ShaderResourceView(dxDevice11, tmpResource);
+                                }
+                                catch (Exception)
+                                {
+                                    selectedSRV = null;
+                                }
+                                tmpResource.Dispose();
+                            }
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
                             selectedSRV = null;
+                            Log!.Warning($"[MaskedCarnivale] Failed to read render target {cfg.renderIndex}: {ex.Message}");
                         }
-                        tmpResource.Dispose();
                     }
                 }
             }
