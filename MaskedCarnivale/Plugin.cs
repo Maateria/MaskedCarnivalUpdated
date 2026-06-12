@@ -56,6 +56,7 @@ public unsafe class Plugin : IDalamudPlugin
     private RenderTargetView? sharedRTV { get; set; } = null!;
     private ShaderResourceView? sharedSRV { get; set; } = null!;
     private ShaderResourceView? selectedSRV { get; set; } = null!;
+    private bool sharedTextureFailed = false;
     private int oldRenderIndex = -1;
 
     private RenderTargetManager* renderTargetManager = RenderTargetManager.Instance();
@@ -421,7 +422,23 @@ public unsafe class Plugin : IDalamudPlugin
     private bool CreateTexturesShared(Device11 dxDevice11, DeviceContext11 dxDevCon11)
     {
         if (outputWindowData->isOutputActive > 0 && outputWindowData->sharedHandle > 0)
-            sharedTexture = dxDevice11.OpenSharedResource<Texture2D>(outputWindowData->sharedHandle);
+        {
+            try
+            {
+                sharedTexture = dxDevice11.OpenSharedResource<Texture2D>(outputWindowData->sharedHandle);
+            }
+            catch (Exception ex)
+            {
+                // Sur certaines configs multi-GPU (ex: portable Intel/NVIDIA), le handle
+                // partage par outputwindow.exe peut venir d'un autre adaptateur et
+                // OpenSharedResource leve une exception (E_INVALIDARG) qui, si elle
+                // n'est pas interceptee ici, plante le jeu entier.
+                Log!.Error(ex, "[MaskedCarnivale] Failed to open shared texture");
+                sharedTexture = null;
+                sharedTextureFailed = true;
+                return false;
+            }
+        }
 
         if (sharedTexture != null)
         {
@@ -471,6 +488,8 @@ public unsafe class Plugin : IDalamudPlugin
 
     private unsafe void DXGIPresentFn(UInt64 a, UInt64 b)
     {
+        try
+        {
         FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device* ffxivDevice = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device.Instance();
         Device11 dxDevice11 = (Device11)(IntPtr)ffxivDevice->D3D11Forwarder;
         DeviceContext11 dxDevCon11 = (DeviceContext11)(IntPtr)ffxivDevice->D3D11DeviceContext;
@@ -478,7 +497,7 @@ public unsafe class Plugin : IDalamudPlugin
         //----
         // If the window is open and we havent connected to the shared texture yet, connect to it
         //----
-        if (outputWindowData->isOutputActive > 0 && outputWindowData->sharedHandle > 0 && sharedTexture == null)
+        if (outputWindowData->isOutputActive > 0 && outputWindowData->sharedHandle > 0 && sharedTexture == null && !sharedTextureFailed)
         {
             outputWindowData->isGameActive = (byte)shareMemType;
             outputWindowData->newTop = cfg.yPosition;
@@ -568,6 +587,16 @@ public unsafe class Plugin : IDalamudPlugin
         else if (outputWindowData->isOutputActive == 0 && outputWindowData->sharedHandle == 0 && sharedTexture != null)
         {
             DestroyTexturesShared();
+        }
+
+        if (outputWindowData->isOutputActive == 0)
+            sharedTextureFailed = false;
+        }
+        catch (Exception ex)
+        {
+            // Une exception non interceptee ici remonte jusqu'au tick natif du jeu
+            // (Framework.Tick -> PostTick -> Present) et fait crash le jeu entier.
+            Log!.Error(ex, "[MaskedCarnivale] Exception in DXGIPresentFn");
         }
 
         DXGIPresentHook!.Original(a, b);
